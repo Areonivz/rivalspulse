@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     # CORS — accepts a comma-separated string and splits it into a list
     cors_origins: str = "http://localhost:3000"
 
+    # MarvelRivalsAPI.com credentials (MVP 3+)
+    marvel_rivals_api_key: str = ""
+    marvel_rivals_api_base_url: str = "https://marvelrivalsapi.com/api/v1"
+
+    # Ingestion tuning
+    ingestion_request_timeout: float = 30.0      # per-request timeout in seconds
+    ingestion_rate_limit_delay: float = 1.0      # seconds between requests
+    ingestion_max_retries: int = 3               # exponential back-off retries
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_cors(cls, v: str) -> str:
