@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚡ RivalsPulse
 
-## Getting Started
+RivalsPulse is a comprehensive, production-grade **Marvel Rivals Meta Analytics Platform**. The system tracks aggregate character win rates, pick velocities, patch impacts, and map-specific synergies using a privacy-first data design. It translates complex, raw data signals into an explainable, multi-factor recommendation engine.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🎨 Core Platform Features
+
+- **Landing Dashboard (`/`):** KPI summary metrics, recent balancing updates, high-level top-performing asset grids, and interactive distribution visualizations.
+- **Interactive Meta Matrix (`/meta`):** A filterable, fully sortable tabular matrix powered by **TanStack Table v9** featuring dynamic role segregation, rank filters, and patch-over-patch trend indicators.
+- **Multi-Factor Recommendation Engine (`/recommendations`):** Dynamic, pool-normalized recommendation cards driven by a custom 5-component mathematical scoring schema. Includes interactive calculation modals mapping raw stats to weighted output variables.
+- **Dynamic Asset Profiles (`/heroes/[heroId]`):** dynamic SSG profile screens rendering rolling historical trajectory line-charts using **Recharts**, alongside cross-referenced contextual map-affinity indexes.
+- **Patch Impact Analytics (`/patches`):** Historical balancing ledger plotting comparative performance differentials, system gainers/losers, and categorized dev logs.
+
+---
+
+## 🏗️ Technical Architecture & Ecosystem
+
+RivalsPulse is engineered as a decoupled full-stack application utilizing professional data design guidelines:
+
+### Frontend
+- **Framework:** Next.js 16 (TypeScript) via App Router layout paths.
+- **Styling primitives:** Tailwind CSS (Dark-first gaming theme paradigm).
+- **Data Layers:** TanStack Table v9 (Stable functional definitions) and Recharts.
+
+### Backend Engine
+- **Core Server:** FastAPI (Python 3.13) with fully automated CamelCase schema serialization matching frontend interfaces.
+- **Data Warehouse Layer:** PostgreSQL analytics schema structured using an optimized **Medallion Data Architecture (Bronze -> Silver -> Gold)** utilizing SQLAlchemy and SQLModel models.
+
+```text
+       [ Documented MarvelRivalsAPI.com Payload ]
+                          │
+                          ▼
+┌───────────────────────────────────────────────────────────┐
+│              POSTGRESQL WAREHOUSE MATRIX                  │
+│                                                           │
+│  🥉 BRONZE:   raw_api_responses (Idempotency Checksums)  │
+│      │                                                    │
+│      ▼                                                    │
+│  🥈 SILVER:   dim_heroes │ dim_maps │ fact_daily_stats    │
+│      │                                                    │
+│      ▼                                                    │
+│  🥇 GOLD:     agg_meta_by_rank │ agg_recommendations      │
+└─────────────────────────┬─────────────────────────────────┘
+                          │
+                          ▼
+            [ FastAPI Service Controller Layer ]
+                          │
+                          ▼
+         [ Decoupled Client Next.js Dashboard ]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Local Deployment Instructions
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
+- Node.js (v18+)
+- Python (v13 or v14 configured in path context)
 
-## Learn More
+### 1. Backend Service Launch
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+*The interactive API documentation matrix will be running locally at `http://localhost:8000/docs`*
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Frontend Interface Launch
+Open a parallel terminal shell in the root workspace path:
+```bash
+npm install
+npm run dev
+```
+*The interactive client console matrix will initialize locally at `http://localhost:3000`*
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🔒 Data Privacy Framework
+To ensure absolute compliance with public platform keys, RivalsPulse operates **strictly on aggregated data models**. The database design relies on tokenized source tracking, explicitly hiding single-player operational loops, match histories, or individual identification flags across all system collection matrices.
