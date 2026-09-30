@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
 
+    # Database — asyncpg async driver (MVP 3+)
+    # Override in .env: DATABASE_URL=postgresql+asyncpg://user:pw@host:5432/rivalspulse
+    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/rivalspulse"
+
     # CORS — accepts a comma-separated string and splits it into a list
     cors_origins: str = "http://localhost:3000"
 
