@@ -1,0 +1,193 @@
+# RivalsPulse — MVP Product Specification
+# Single source of truth. Read before making any changes.
+
+## 1. PRODUCT DESCRIPTION
+RivalsPulse is a Marvel Rivals meta analytics dashboard.
+It ingests match data from MarvelRivalsAPI.com through a private backend pipeline
+and surfaces aggregate insights for competitive players.
+Aggregate-only: NO individual player profiles, histories, or UIDs are exposed.
+
+## 2. TARGET USERS
+- Ranked Grinder: Diamond-GM optimising picks for current patch
+- Casual Improver: Gold-Plat looking for "what should I play"
+- Content Creator: streamer wanting shareable meta snapshots
+- Theorycrafter: interested in patch trends and tier debates
+
+## 3. CORE USER STORIES
+1. See win/pick rates for all heroes to find strong meta picks.
+2. Filter by role to compare within Vanguard / Duelist / Strategist.
+3. See hero performance per map to adapt hero pool.
+4. Get top-3 recommended picks filtered by role/rank/map.
+5. Track win rate shifts across patches to understand balance impact.
+6. Fast, polished experience on desktop and mobile; no account required.
+
+## 4. MVP STAGES
+| Stage | Scope                                        | Status   |
+|-------|----------------------------------------------|----------|
+| MVP 1 | Static frontend with mock data               | ACTIVE   |
+| MVP 2 | FastAPI + PostgreSQL schema + seeding        | Planned  |
+| MVP 3 | Live ingestion pipeline + Redis caching      | Planned  |
+| MVP 4 | Recommendation engine + patch diffing        | Planned  |
+| MVP 5 | Polish, SEO, public launch                   | Planned  |
+Do NOT skip stages or implement backend logic during MVP 1.
+
+## 5. THE 5 MVP PAGES
+### 5.1 `/` Landing / Overview Dashboard
+- Hero section: tagline, sub-copy, CTA -> /meta
+- KPI strip: Total Heroes, Matches Analysed, Patches Covered, Last Updated
+- Top 5 Heroes by Win Rate (card grid: role badge, win%, pick%)
+- Role Distribution doughnut chart (Vanguard / Duelist / Strategist)
+- Recent Patch banner: patch number, key bullets, link -> /patches
+
+### 5.2 `/meta` Hero Meta Table
+- Sortable/filterable TanStack Table of all heroes
+- Columns: Hero, Role, Win Rate, Pick Rate, Ban Rate, KDA, Tier (S/A/B/C)
+- Filters: Role (multi-select), Rank, Patch (dropdown)
+- Row click navigates to /heroes/[heroId]
+- Top 10 Win Rate horizontal Recharts BarChart
+
+### 5.3 `/recommendations` Recommended Picks
+- Filter bar: Role, Rank, Map
+- 3 Hero recommendation cards with reasoning, stats, synergy tip, counter tip
+- "Why this pick?" expandable accordion per card
+
+### 5.4 `/heroes/[heroId]` Hero Detail Page
+- Header: name, role, portrait placeholder, tier badge
+- Stat cards: Win Rate, Pick Rate, Ban Rate, Avg KDA
+- Win Rate Over Time line chart (last 6 patches, Recharts)
+- Map Performance table: map name, win rate, pick rate
+- Synergies and Counters two-column grid
+- Back link -> /meta
+
+### 5.5 `/patches` Patch History
+- Timeline list newest-first
+- Per patch: version, date, summary bullets, affected heroes badge list
+- Hero Impact grouped BarChart showing delta win rate per hero
+- Patch selector for side-by-side comparison (MVP 4 placeholder)
+
+## 6. COMPONENT ARCHITECTURE
+src/
+  app/
+    layout.tsx                       Root layout: Navbar + Footer
+    page.tsx                         / Landing
+    meta/page.tsx                    /meta
+    recommendations/page.tsx         /recommendations
+    heroes/[heroId]/page.tsx         /heroes/[heroId]
+    patches/page.tsx                 /patches
+  components/
+    layout/Navbar.tsx
+    layout/Footer.tsx
+    ui/StatCard.tsx
+    ui/HeroCard.tsx
+    ui/RoleBadge.tsx
+    ui/TierBadge.tsx
+    ui/SectionHeader.tsx
+    charts/WinRateBarChart.tsx
+    charts/RoleDistributionChart.tsx
+    charts/WinRateLineChart.tsx
+    charts/PatchImpactBarChart.tsx
+    tables/HeroMetaTable.tsx
+    tables/MapStatsTable.tsx
+    recommendations/RecommendationCard.tsx
+  lib/
+    mock/heroes.ts
+    mock/patches.ts
+    mock/maps.ts
+    mock/recommendations.ts
+    types/hero.ts
+    types/patch.ts
+    types/recommendation.ts
+    utils/formatters.ts
+
+## 7. BACKEND API CONTRACTS (MVP 2+)
+FastAPI under /api/v1/. All list endpoints support ?patch= query param.
+GET /api/v1/heroes                          -> HeroStats[]
+GET /api/v1/heroes/{hero_id}                -> HeroStats (with map breakdown)
+GET /api/v1/heroes/{hero_id}/history        -> { patch, win_rate, pick_rate }[]
+GET /api/v1/meta?patch=&role=&rank=         -> { heroes, generated_at }
+GET /api/v1/recommendations?role=&rank=&map=-> Recommendation[] top 3
+GET /api/v1/patches                         -> Patch[] newest first
+GET /api/v1/patches/{patch_id}              -> Patch with hero_changes
+GET /api/v1/maps                            -> Map[]
+GET /api/v1/maps/{map_id}/heroes            -> { hero_id, name, win_rate, pick_rate }[]
+
+## 8. DATABASE TABLES (PostgreSQL — MVP 2+)
+heroes: id TEXT PK, name, role (Vanguard|Duelist|Strategist), portrait_url, created_at
+hero_stats: id SERIAL PK, hero_id FK, patch, rank_band, win_rate, pick_rate,
+  ban_rate, avg_kda, sample_size, recorded_at. UNIQUE(hero_id, patch, rank_band)
+hero_map_stats: id SERIAL PK, hero_id FK, map_id FK, patch, win_rate, pick_rate,
+  sample_size, recorded_at. UNIQUE(hero_id, map_id, patch)
+maps: id TEXT PK, name, game_mode (Domination|Convoy|Convergence), created_at
+patches: id TEXT PK, label, released_at DATE, notes TEXT, is_major BOOL
+patch_hero_changes: id SERIAL PK, patch_id FK, hero_id FK,
+  change_type (buff|nerf|rework|new), description
+
+## 9. DATA INGESTION FLOW (MVP 3+)
+MarvelRivalsAPI.com -> APScheduler job every 6h
+-> FastAPI worker: fetch batch, aggregate by hero+patch (NO player UIDs stored),
+   upsert hero_stats + hero_map_stats, invalidate Redis keys
+-> PostgreSQL primary store
+-> Redis cache TTL 30min: meta:{patch}:{rank}, heroes:{id}, recs:{role}:{rank}:{map}
+
+## 10. RECOMMENDATION SCORING MODEL (MVP 4+)
+score = (win_rate * 0.45) + (pick_rate * 0.20)
+      + (map_win_rate * 0.25) + (patch_delta * 0.10)
+Only heroes matching selected role. Exclude sample_size < 500.
+Return top 3 by score with template-generated reasoning text.
+
+## 11. PRIVACY RULES (ALL STAGES)
+1. No player-level data displayed.
+2. No player UIDs stored anywhere.
+3. No third-party tracking (no GA, no Meta Pixel).
+4. Only documented MarvelRivalsAPI.com endpoints used.
+5. Ingestion rate-limited with exponential back-off.
+
+## 12. FEATURES OUT OF SCOPE
+- Player profile / account lookup
+- Live match tracking / real-time overlay
+- User accounts, auth, saved preferences
+- Monetisation, ads, premium tiers
+- Community features (comments, ratings, forums)
+- Mobile app
+- Hero ability / lore content
+- OAuth login
+
+## 13. FUTURE ROADMAP
+v2: URL-persisted rank params + shareable links, Discord/email patch alerts
+v3: Patch comparison slider, synergy matrix heatmap
+v4: Map-pool rotation tracker, tier list PNG export
+v5: Streamer embed widget, public rate-limited JSON API
+
+## 14. CODING CONVENTIONS
+- Package manager: npm
+- Framework: Next.js 15 App Router
+- Language: TypeScript strict mode
+- Styling: Tailwind CSS v4 (no CSS modules, no inline style props)
+- Charts: Recharts
+- Tables: TanStack Table v8
+- Icons: lucide-react
+- Class merging: clsx
+- Dark-first: bg-gray-950 base, text-gray-100 primary text
+- Brand accent: red-500 (#ef4444)
+- Secondary accent: amber-400 (tier S / top performers)
+- Chart palette: ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7']
+- Named exports only (no default exports from type files)
+- NEXT_PUBLIC_ prefix for client-safe env vars
+- Backend: FastAPI on :8000, Next.js on :3000
+
+## 15. MOCK DATA ROSTER (MVP 1)
+Vanguards (8): Captain America, Doctor Strange, Groot, Hulk,
+  Magneto, Peni Parker, Thor, Venom
+Duelists (16): Black Panther, Black Widow, Hawkeye, Iron Fist, Iron Man,
+  Mister Fantastic, Moon Knight, Namor, Psylocke, Scarlet Witch, Spider-Man,
+  Squirrel Girl, Star-Lord, Storm, Winter Soldier, Wolverine
+Strategists (6): Adam Warlock, Cloak & Dagger, Jeff the Land Shark,
+  Loki, Luna Snow, Mantis
+Maps (8): Yggsgard, Wakanda, Symbiotic Surface, Tokyo 2099,
+  Spider-Islands, Hydra Charteris Base, Royal Palace, Hall of Djalia
+Rank Bands: Bronze-Silver | Gold-Platinum | Diamond-Grandmaster | Celestial+
+Current Mock Patch: 1.5 "The Symbiote Surge" (2024-11-15)
+  Key changes: Venom +4% win rate buff, Storm reworked, Iron Man minor nerf
+
+---
+End of RivalsPulse Product Specification
